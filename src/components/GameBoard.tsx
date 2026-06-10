@@ -60,7 +60,7 @@ export function GameBoard({
     isGameOver: false,
     isVictory: false,
     paused: false,
-    threatIndex: 1.0, // Dynamic difficulty factor
+    threatIndex: 0.7, // Dynamic difficulty factor starts lower (EASY)
     screenShake: 0,
     warningTimer: 0,
     
@@ -98,7 +98,8 @@ export function GameBoard({
     // Timers
     enemySpawnTimer: 0,
     bossDefeatTimer: 0,
-    runTimer: 0
+    runTimer: 0,
+    timeSinceLastBoss: 1800 // Tracks frames since a boss was active/spawned to ensure reasonable gameplay intervals
   });
 
   // React state mirroring for UI layer (updated periodically or on game end)
@@ -110,7 +111,7 @@ export function GameBoard({
   const [maxHp, setMaxHp] = useState(100);
   const [shield, setShield] = useState(50);
   const [maxShield, setMaxShield] = useState(50);
-  const [threatIndex, setThreatIndex] = useState(1.0);
+  const [threatIndex, setThreatIndex] = useState(0.7);
   const [bossActive, setBossActive] = useState(false);
   const [bossHp, setBossHp] = useState(0);
   const [bossMaxHp, setBossMaxHp] = useState(100);
@@ -208,7 +209,7 @@ export function GameBoard({
     state.isGameOver = false;
     state.isVictory = false;
     state.paused = false;
-    state.threatIndex = 1.0;
+    state.threatIndex = 0.7;
     state.enemies = [];
     state.bullets = [];
     state.particles = [];
@@ -217,6 +218,7 @@ export function GameBoard({
     state.enemySpawnTimer = 40;
     state.bossDefeatTimer = 0;
     state.runTimer = 0;
+    state.timeSinceLastBoss = 1800; // Reset boss interval cooldown on restart
     state.player.x = logicalWidth / 2;
     state.player.y = logicalHeight - 120;
 
@@ -229,7 +231,7 @@ export function GameBoard({
     setMaxHp(state.player.maxHp);
     setShield(state.player.shield);
     setMaxShield(state.player.maxShield);
-    setThreatIndex(1.0);
+    setThreatIndex(0.7);
     setBossActive(false);
     setWarningActive(false);
     setWeaponLevel(1);
@@ -699,13 +701,39 @@ export function GameBoard({
       }
     }
 
+    // Tick timeSinceLastBoss counter
+    if (state.boss || state.warningTimer > 0) {
+      state.timeSinceLastBoss = 0;
+    } else {
+      state.timeSinceLastBoss++;
+    }
+
     // Space environmental threat adjustments (dynamic difficulty index)
     // Slowly tick threat index upwards based on survival, or cap/adjust
     if (state.runTimer % 180 === 0 && !state.isGameOver && !state.isVictory) {
-      // Increase threat slowly as time progresses, capped at 3.0x difficulty for maximum balance
-      state.threatIndex = Math.min(3.0, state.threatIndex + 0.05);
-      setThreatIndex(state.threatIndex);
-      SoundSynth.threatFactor = state.threatIndex;
+      // Increase threat slowly ONLY if user is stable/healthy (above 35% HP)
+      const healthRatio = state.player.hp / state.player.maxHp;
+      if (healthRatio > 0.35) {
+        state.threatIndex = Math.min(2.5, state.threatIndex + 0.04);
+        setThreatIndex(state.threatIndex);
+        SoundSynth.threatFactor = state.threatIndex;
+      }
+    }
+
+    // Dynamic recovery automatic safety net: if near to lose, lock threat index to easier scaling!
+    const loopHealthRatio = state.player.hp / state.player.maxHp;
+    if (loopHealthRatio <= 0.35 && !state.isGameOver && !state.isVictory) {
+      if (state.threatIndex > 0.65) {
+        state.threatIndex = 0.65;
+        setThreatIndex(state.threatIndex);
+        SoundSynth.threatFactor = state.threatIndex;
+      }
+
+      // Health-based dynamic boss event with cooldown protection:
+      // "Toda vez que a vida está baixa vem um boss para dar chance de derrotar o boss e recuperar o escudo. Precisamos garantir um bom intervalo de jogo entre os boss."
+      if (!state.boss && state.warningTimer === 0 && state.timeSinceLastBoss >= 2400) {
+        initBossFight();
+      }
     }
 
     // Stars background parallax scroll
@@ -1081,7 +1109,7 @@ export function GameBoard({
     state.enemies = state.enemies.filter(enemy => enemy.y < logicalHeight + 50);
     if (state.enemies.length < originalCount) {
       // Small index reduction since enemies slipped screen (slight challenge drop)
-      state.threatIndex = Math.max(1.0, state.threatIndex - 0.02);
+      state.threatIndex = Math.max(0.55, state.threatIndex - 0.02);
     }
 
     // -------------------------------------------------------------
@@ -1369,7 +1397,19 @@ export function GameBoard({
             vy: -1.5,
             width: 18,
             height: 18,
-            value: 30
+            value: 50 // Boost healing amount to help players fully recover!
+          });
+
+          state.collectibles.push({
+            id: Math.random().toString(),
+            type: "SHIELD_RESTORE",
+            x: boss.x + 30,
+            y: boss.y,
+            vx: 1.0,
+            vy: -1.5,
+            width: 18,
+            height: 18,
+            value: 50 // Recharges shields so user can brace next waves
           });
 
           // Stage advance logic!
@@ -1509,69 +1549,78 @@ export function GameBoard({
             SoundSynth.playExplosionSound("MEDIUM");
             createExplosionParticles(enemy.x, enemy.y, enemy.color, 12, "MEDIUM");
 
-            // Minor progressive adjustment to Threat Index
-            state.threatIndex = Math.min(3.0, state.threatIndex + 0.008);
-            setThreatIndex(state.threatIndex);
+            // Minor progressive adjustment to Threat Index if not in critical state
+            if (state.player.hp / state.player.maxHp > 0.35) {
+              state.threatIndex = Math.min(2.5, state.threatIndex + 0.008);
+              setThreatIndex(state.threatIndex);
+            }
 
-            // Procedural collectible drops based on luck
-            const luckyChance = Math.random();
-            let scrapValue = Math.floor(Math.random() * 4) + 1; // 1 to 4 scrap base
-            
-            // Adjust scrap value using permanent ScrapRefiner multiplier upgrades
-            const refinerMult = UPGRADE_METADATA.scrapRefiner.valueBase + (upgrades.scrapRefiner * UPGRADE_METADATA.scrapRefiner.valuePerLevel);
-            scrapValue = Math.round(scrapValue * refinerMult);
+            // Procedural collectible drops based on luck with critical health safety skew:
+            // "implemente um sistema de drops ao eliminar alguns inimigos. Os drops devem garantir recuperação de escudo e energia quando o jogador estiver quase perdendo"
+            const hpRatio = state.player.hp / state.player.maxHp;
+            const shieldRatio = state.player.shield / state.player.maxShield;
+            const isCritical = hpRatio <= 0.35 || state.player.hp < 30;
 
-            if (luckyChance < 0.40) {
-              // Drops Scrap coin
+            let dropType: "SCRAP" | "HEAL" | "WEAPON_POWERUP" | "SHIELD_RESTORE" | null = null;
+
+            if (isCritical) {
+              // Guaranteed drops! Dynamic resource helper skews to assist survival
+              if (shieldRatio <= 0.20) {
+                // Low shield -> prioritize shield recovery
+                const r = Math.random();
+                if (r < 0.70) dropType = "SHIELD_RESTORE";
+                else if (r < 0.92) dropType = "HEAL";
+                else dropType = "WEAPON_POWERUP";
+              } else if (hpRatio <= 0.25) {
+                // Low health -> prioritize energy recovery (HEAL)
+                const r = Math.random();
+                if (r < 0.70) dropType = "HEAL";
+                else if (r < 0.92) dropType = "SHIELD_RESTORE";
+                else dropType = "WEAPON_POWERUP";
+              } else {
+                // General emergency distribution (equal heals/shields support)
+                const r = Math.random();
+                if (r < 0.45) dropType = "HEAL";
+                else if (r < 0.90) dropType = "SHIELD_RESTORE";
+                else dropType = "WEAPON_POWERUP";
+              }
+            } else {
+              // Normal gameplay drop rates (boosted and satisfying)
+              const luckyChance = Math.random();
+              if (luckyChance < 0.35) {
+                dropType = "SCRAP";
+              } else if (luckyChance < 0.55) {
+                dropType = "SHIELD_RESTORE";
+              } else if (luckyChance < 0.70) {
+                dropType = "HEAL";
+              } else if (luckyChance < 0.85) {
+                dropType = "WEAPON_POWERUP";
+              }
+              // 15% chance of no drop to retain high-level challenge progression
+            }
+
+            if (dropType) {
+              let scrapValue = Math.floor(Math.random() * 4) + 1; // 1 to 4 scrap base
+              const refinerMult = UPGRADE_METADATA.scrapRefiner.valueBase + (upgrades.scrapRefiner * UPGRADE_METADATA.scrapRefiner.valuePerLevel);
+              scrapValue = Math.round(scrapValue * refinerMult);
+
+              let itemValue = 25; // boost recovery values so comeback attempts feel helpful
+              if (dropType === "SCRAP") {
+                itemValue = scrapValue;
+              } else if (dropType === "WEAPON_POWERUP") {
+                itemValue = 1;
+              }
+
               state.collectibles.push({
                 id: Math.random().toString(),
-                type: "SCRAP",
+                type: dropType,
                 x: enemy.x,
                 y: enemy.y,
-                vx: Math.random() * 4 - 2,
-                vy: -Math.random() * 2 - 1,
-                width: 10,
-                height: 10,
-                value: scrapValue
-              });
-            } else if (luckyChance < 0.48) {
-              // Chance to drop shield recharge core
-              state.collectibles.push({
-                id: Math.random().toString(),
-                type: "SHIELD_RESTORE",
-                x: enemy.x,
-                y: enemy.y,
-                vx: Math.random() * 2 - 1,
+                vx: Math.random() * 3 - 1.5,
                 vy: -2,
-                width: 12,
-                height: 12,
-                value: 15
-              });
-            } else if (luckyChance < 0.53) {
-              // Chance to drop hull structural repair pack
-              state.collectibles.push({
-                id: Math.random().toString(),
-                type: "HEAL",
-                x: enemy.x,
-                y: enemy.y,
-                vx: Math.random() * 2 - 1,
-                vy: -2,
-                width: 12,
-                height: 12,
-                value: 20
-              });
-            } else if (luckyChance < 0.57) {
-              // Chance to drop weapon multiplier power core (level up weapon temporary)
-              state.collectibles.push({
-                id: Math.random().toString(),
-                type: "WEAPON_POWERUP",
-                x: enemy.x,
-                y: enemy.y,
-                vx: Math.random() * 1.5 - 0.75,
-                vy: -1.5,
-                width: 12,
-                height: 12,
-                value: 1
+                width: dropType === "SCRAP" ? 10 : 12,
+                height: dropType === "SCRAP" ? 10 : 12,
+                value: itemValue
               });
             }
           }
@@ -1796,7 +1845,7 @@ export function GameBoard({
     setHp(Math.floor(Math.max(0, state.player.hp)));
 
     // Adjust threat factor down slightly to help players struggling with direct hits!
-    state.threatIndex = Math.max(1.0, state.threatIndex - 0.08);
+    state.threatIndex = Math.max(0.55, state.threatIndex - 0.08);
     setThreatIndex(state.threatIndex);
 
     // Structural Annihilation (Defeat state check)
@@ -2370,11 +2419,13 @@ export function GameBoard({
               <span className={`font-bold uppercase ${
                 threatIndex > 2.0 
                   ? "text-rose-500 drop-shadow-[0_0_4px_rgba(244,63,94,0.4)]" 
+                  : (hp / maxHp <= 0.35)
+                  ? "text-yellow-400 animate-pulse font-extrabold"
                   : threatIndex > 1.5 
                   ? "text-orange-400" 
                   : "text-emerald-400"
               }`}>
-                {threatIndex.toFixed(2)}x {threatIndex > 2.2 ? "CAOS" : threatIndex > 1.6 ? "SARGENTO" : "RECRUTA"}
+                {threatIndex.toFixed(2)}x {hp / maxHp <= 0.35 ? "RECUPERAÇÃO" : threatIndex > 2.2 ? "CAOS" : threatIndex > 1.6 ? "SARGENTO" : "RECRUTA"}
               </span>
             </div>
 
