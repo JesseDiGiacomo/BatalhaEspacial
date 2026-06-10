@@ -188,8 +188,14 @@ export default function App() {
   const handleGameEnd = (finalScore: number, finalScrapEarned: number, success: boolean) => {
     const stateVal = success ? "VICTORY" : "GAME_OVER";
     
+    // Double collected scrap + score conversion bonus (5% of score) + victory/defeat bonus!
+    const doubledEarned = finalScrapEarned * 2;
+    const scoreBonus = Math.floor(finalScore * 0.05);
+    const missionStatusBonus = success ? 1000 : 300;
+    const totalRewardingScrap = doubledEarned + scoreBonus + missionStatusBonus;
+    
     // Add scrap permanently
-    const totalAccumulatedScrap = scrap + finalScrapEarned;
+    const totalAccumulatedScrap = scrap + totalRewardingScrap;
     setScrap(totalAccumulatedScrap);
     localStorage.setItem("shmup_scrap_val", String(totalAccumulatedScrap));
 
@@ -202,7 +208,7 @@ export default function App() {
     }
 
     setCurrentRunScore(finalScore);
-    setCurrentRunScrapCollected(finalScrapEarned);
+    setCurrentRunScrapCollected(totalRewardingScrap);
     
     // De-activate boss overlay
     setLiveStats(prev => ({

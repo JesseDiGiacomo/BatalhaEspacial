@@ -1361,17 +1361,17 @@ export function GameBoard({
 
         if (state.bossDefeatTimer > 130) {
           // Boss finally eliminated! Drop massive upgrade crates!
-          for (let k = 0; k < 12; k++) {
+          for (let k = 0; k < 18; k++) {
             state.collectibles.push({
               id: Math.random().toString(),
               type: "SCRAP",
-              x: boss.x + (Math.random() * 60 - 30),
-              y: boss.y + (Math.random() * 40 - 20),
-              vx: Math.random() * 4 - 2,
-              vy: -Math.random() * 3 - 1,
-              width: 14,
-              height: 14,
-              value: 12 + Math.floor(Math.random() * 8)
+              x: boss.x + (Math.random() * 80 - 40),
+              y: boss.y + (Math.random() * 60 - 30),
+              vx: Math.random() * 5 - 2.5,
+              vy: -Math.random() * 4 - 1,
+              width: 15,
+              height: 15,
+              value: 120 + Math.floor(Math.random() * 50)
             });
           }
 
@@ -1555,16 +1555,33 @@ export function GameBoard({
               setThreatIndex(state.threatIndex);
             }
 
-            // Procedural collectible drops based on luck with critical health safety skew:
-            // "implemente um sistema de drops ao eliminar alguns inimigos. Os drops devem garantir recuperação de escudo e energia quando o jogador estiver quase perdendo"
+            // Procedural collectible drops: Every single enemy defeat is highly rewarding!
+            // 1. Guaranteed Scrap Drop + Scrap Refiner Multiplier
+            const refinerMult = UPGRADE_METADATA.scrapRefiner.valueBase + (upgrades.scrapRefiner * UPGRADE_METADATA.scrapRefiner.valuePerLevel);
+            let scrapValue = Math.floor(Math.random() * 25) + 15; // 15 to 40 base scrap per kill!
+            scrapValue = Math.round(scrapValue * refinerMult);
+
+            state.collectibles.push({
+              id: Math.random().toString(),
+              type: "SCRAP",
+              x: enemy.x,
+              y: enemy.y,
+              vx: Math.random() * 4 - 2,
+              vy: -1.8,
+              width: 11,
+              height: 11,
+              value: scrapValue
+            });
+
+            // 2. Extra powerup drops based on survival status:
             const hpRatio = state.player.hp / state.player.maxHp;
             const shieldRatio = state.player.shield / state.player.maxShield;
             const isCritical = hpRatio <= 0.35 || state.player.hp < 30;
 
-            let dropType: "SCRAP" | "HEAL" | "WEAPON_POWERUP" | "SHIELD_RESTORE" | null = null;
+            let dropType: "HEAL" | "WEAPON_POWERUP" | "SHIELD_RESTORE" | null = null;
 
             if (isCritical) {
-              // Guaranteed drops! Dynamic resource helper skews to assist survival
+              // Guaranteed extra recovery drop under critical state!
               if (shieldRatio <= 0.20) {
                 // Low shield -> prioritize shield recovery
                 const r = Math.random();
@@ -1585,41 +1602,35 @@ export function GameBoard({
                 else dropType = "WEAPON_POWERUP";
               }
             } else {
-              // Normal gameplay drop rates (boosted and satisfying)
+              // High chance (60%) of extra recovery/powerup drops in normal gameplay
               const luckyChance = Math.random();
-              if (luckyChance < 0.35) {
-                dropType = "SCRAP";
-              } else if (luckyChance < 0.55) {
-                dropType = "SHIELD_RESTORE";
-              } else if (luckyChance < 0.70) {
-                dropType = "HEAL";
-              } else if (luckyChance < 0.85) {
-                dropType = "WEAPON_POWERUP";
+              if (luckyChance < 0.60) {
+                const rType = Math.random();
+                if (rType < 0.35) {
+                  dropType = "SHIELD_RESTORE";
+                } else if (rType < 0.70) {
+                  dropType = "HEAL";
+                } else {
+                  dropType = "WEAPON_POWERUP";
+                }
               }
-              // 15% chance of no drop to retain high-level challenge progression
             }
 
             if (dropType) {
-              let scrapValue = Math.floor(Math.random() * 4) + 1; // 1 to 4 scrap base
-              const refinerMult = UPGRADE_METADATA.scrapRefiner.valueBase + (upgrades.scrapRefiner * UPGRADE_METADATA.scrapRefiner.valuePerLevel);
-              scrapValue = Math.round(scrapValue * refinerMult);
-
-              let itemValue = 25; // boost recovery values so comeback attempts feel helpful
-              if (dropType === "SCRAP") {
-                itemValue = scrapValue;
-              } else if (dropType === "WEAPON_POWERUP") {
+              let itemValue = 35; // boost recovery values for faster comeback
+              if (dropType === "WEAPON_POWERUP") {
                 itemValue = 1;
               }
 
               state.collectibles.push({
                 id: Math.random().toString(),
                 type: dropType,
-                x: enemy.x,
-                y: enemy.y,
-                vx: Math.random() * 3 - 1.5,
-                vy: -2,
-                width: dropType === "SCRAP" ? 10 : 12,
-                height: dropType === "SCRAP" ? 10 : 12,
+                x: enemy.x + (Math.random() * 24 - 12),
+                y: enemy.y - 10,
+                vx: Math.random() * 2 - 1.0,
+                vy: -2.2,
+                width: 12,
+                height: 12,
                 value: itemValue
               });
             }
