@@ -2390,7 +2390,7 @@ export function GameBoard({
         />
 
         {/* ======================================================= */}
-        // GRAPHICS OVERLAY HUD LAYER (Renders directly above canvas)
+        {/* GRAPHICS OVERLAY HUD LAYER (Renders directly above canvas) */}
         {/* ======================================================= */}
         
         {/* Top Header Panel (Score, Stage, Coins) */}
