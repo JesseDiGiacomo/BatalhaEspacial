@@ -99,7 +99,7 @@ export function GameBoard({
     enemySpawnTimer: 0,
     bossDefeatTimer: 0,
     runTimer: 0,
-    timeSinceLastBoss: 1800 // Tracks frames since a boss was active/spawned to ensure reasonable gameplay intervals
+    timeSinceLastBoss: 4800 // Tracks frames since a boss was active/spawned to ensure reasonable gameplay intervals
   });
 
   // React state mirroring for UI layer (updated periodically or on game end)
@@ -218,7 +218,7 @@ export function GameBoard({
     state.enemySpawnTimer = 40;
     state.bossDefeatTimer = 0;
     state.runTimer = 0;
-    state.timeSinceLastBoss = 1800; // Reset boss interval cooldown on restart
+    state.timeSinceLastBoss = 4800; // Reset boss interval cooldown on restart
     state.player.x = logicalWidth / 2;
     state.player.y = logicalHeight - 120;
 
@@ -625,7 +625,7 @@ export function GameBoard({
     const state = gameStateRef.current;
     
     let name = "Nêmesis Orbital [CÉLULA-1]";
-    let maxHp = 500;
+    let maxHp = 700;
     let width = 120;
     let height = 80;
 
@@ -633,18 +633,18 @@ export function GameBoard({
 
     if (state.stage === 2) {
       name = "Sombra do Vazio [NÚCLEO-S]";
-      maxHp = 750;
+      maxHp = 1100;
       width = 110;
       height = 70;
     } else if (state.stage === 3) {
       name = "Destruidor de Sistemas [NÚCLEO-Ω]";
-      maxHp = 1200;
+      maxHp = 1800;
       width = 160;
       height = 100;
     }
 
     // Scale health with threat difficulty index!
-    maxHp = Math.round(maxHp * Math.sqrt(difficultyScale));
+    maxHp = Math.round(maxHp * Math.sqrt(difficultyScale + 0.1));
 
     state.boss = {
       name,
@@ -731,7 +731,7 @@ export function GameBoard({
 
       // Health-based dynamic boss event with cooldown protection:
       // "Toda vez que a vida está baixa vem um boss para dar chance de derrotar o boss e recuperar o escudo. Precisamos garantir um bom intervalo de jogo entre os boss."
-      if (!state.boss && state.warningTimer === 0 && state.timeSinceLastBoss >= 2400) {
+      if (!state.boss && state.warningTimer === 0 && state.timeSinceLastBoss >= 5400) {
         initBossFight();
       }
     }
@@ -1161,15 +1161,15 @@ export function GameBoard({
           // -------------------------------------------------
           if (boss.activePattern === 0) {
             // Pattern A: Spiral Ring Stream
-            const spiralInterval = Math.max(16, Math.floor(35 / cooldownDivider));
+            const spiralInterval = Math.max(12, Math.floor(25 / cooldownDivider));
             if (boss.stateTimer % spiralInterval === 0) {
               SoundSynth.playLaserSound(false);
-              const bulletAngle = (boss.stateTimer * 0.05) % (Math.PI * 2);
-              const numProjectiles = 6;
+              const bulletAngle = (boss.stateTimer * 0.06) % (Math.PI * 2);
+              const numProjectiles = 8;
               
               for (let i = 0; i < numProjectiles; i++) {
                 const angle = bulletAngle + (i * ((Math.PI * 2) / numProjectiles));
-                const bSpeed = 4.2;
+                const bSpeed = 5.2;
                 state.bullets.push({
                   id: Math.random().toString(),
                   x: boss.x,
@@ -1186,20 +1186,20 @@ export function GameBoard({
             }
           } else {
             // Pattern B: Target spreads
-            const spreadInterval = Math.max(38, Math.floor(70 / cooldownDivider));
+            const spreadInterval = Math.max(30, Math.floor(55 / cooldownDivider));
             if (boss.stateTimer % spreadInterval === 0) {
               SoundSynth.playLaserSound(false);
               
               // Angle targeting player
               const pAngle = Math.atan2(state.player.y - boss.y, state.player.x - boss.x);
-              const shots = 3;
-              const bSpeed = 5.0;
+              const shots = 5;
+              const bSpeed = 6.2;
 
               for (let i = 0; i < shots; i++) {
-                const spreadAngle = pAngle + (i - 1) * 0.18;
+                const spreadAngle = pAngle + (i - 2) * 0.15;
                 state.bullets.push({
                   id: Math.random().toString(),
-                  x: boss.x + (i - 1) * 15,
+                  x: boss.x + (i - 2) * 12,
                   y: boss.y + 20,
                   vx: Math.cos(spreadAngle) * bSpeed,
                   vy: Math.sin(spreadAngle) * bSpeed,
@@ -1218,7 +1218,7 @@ export function GameBoard({
           // -------------------------------------------------
           if (boss.activePattern === 0) {
             // Cloaking/Teleportation pattern (dramatic retro mechanic!)
-            if (boss.stateTimer % 150 === 0) {
+            if (boss.stateTimer % 120 === 0) {
               // Fade out / particle burst
               createExplosionParticles(boss.x, boss.y, "#06b6d4", 15, "MEDIUM");
               SoundSynth.playHitSound(true);
@@ -1230,15 +1230,15 @@ export function GameBoard({
               
               // Flare immediate ring burst
               SoundSynth.playLaserSound(false);
-              const prCount = 12;
+              const prCount = 18;
               for (let i = 0; i < prCount; i++) {
                 const angle = (i * Math.PI * 2) / prCount;
                 state.bullets.push({
                   id: Math.random().toString(),
                   x: boss.x,
                   y: boss.targetY,
-                  vx: Math.cos(angle) * 5.2,
-                  vy: Math.sin(angle) * 5.2,
+                  vx: Math.cos(angle) * 6.0,
+                  vy: Math.sin(angle) * 6.0,
                   width: 5,
                   height: 5,
                   damage: 10,
@@ -1249,7 +1249,7 @@ export function GameBoard({
             }
           } else {
             // Rapid high velocity targeting lasers
-            const shootInterval = Math.max(14, Math.floor(25 / cooldownDivider));
+            const shootInterval = Math.max(10, Math.floor(18 / cooldownDivider));
             if (boss.stateTimer % shootInterval === 0) {
               SoundSynth.playLaserSound(false);
               const angleOffset = Math.sin(boss.stateTimer * 0.15) * 0.25;
@@ -1257,10 +1257,10 @@ export function GameBoard({
                 id: Math.random().toString(),
                 x: boss.x - 20,
                 y: boss.y + 10,
-                vx: angleOffset * 4,
-                vy: 6.0,
-                width: 4,
-                height: 14,
+                vx: angleOffset * 4.5,
+                vy: 7.5,
+                width: 5,
+                height: 16,
                 damage: 8,
                 isPlayer: false,
                 color: "#10b981" // green streams
@@ -1269,10 +1269,10 @@ export function GameBoard({
                 id: Math.random().toString(),
                 x: boss.x + 20,
                 y: boss.y + 10,
-                vx: -angleOffset * 4,
-                vy: 6.0,
-                width: 4,
-                height: 14,
+                vx: -angleOffset * 4.5,
+                vy: 7.5,
+                width: 5,
+                height: 16,
                 damage: 8,
                 isPlayer: false,
                 color: "#10b981"
@@ -1284,18 +1284,34 @@ export function GameBoard({
           // STAGE 3 BOSS: SYSTEM DESTROYER (HEAVY FORT)
           // -------------------------------------------------
           if (boss.activePattern === 0) {
-            // Pattern A: Launch slow Homing plasma rockets that target player
-            const rocketInterval = Math.max(50, Math.floor(100 / cooldownDivider));
+            // Pattern A: Launch slow Homing plasma rockets that target player on double flanks!
+            const rocketInterval = Math.max(45, Math.floor(85 / cooldownDivider));
             if (boss.stateTimer % rocketInterval === 0) {
               SoundSynth.playHeavyLaserSound();
+              // Port Missile
               state.bullets.push({
                 id: Math.random().toString(),
-                x: boss.x,
+                x: boss.x - 30,
                 y: boss.y + 25,
-                vx: (state.player.x - boss.x) * 0.015, // slight lead velocity
-                vy: 2.2, // slow but tracking homing rocket
-                width: 12,
-                height: 12,
+                vx: (state.player.x - (boss.x - 30)) * 0.018, // lead velocity
+                vy: 2.8, 
+                width: 13,
+                height: 13,
+                damage: 30, // deals extreme damage!
+                isPlayer: false,
+                color: "#ff007f", // hot neon magenta rocket core
+                isMissile: true,
+                angle: Math.PI / 2
+              });
+              // Starboard Missile
+              state.bullets.push({
+                id: Math.random().toString(),
+                x: boss.x + 30,
+                y: boss.y + 25,
+                vx: (state.player.x - (boss.x + 30)) * 0.018, // lead velocity
+                vy: 2.8,
+                width: 13,
+                height: 13,
                 damage: 30, // deals extreme damage!
                 isPlayer: false,
                 color: "#ff007f", // hot neon magenta rocket core
@@ -1316,22 +1332,22 @@ export function GameBoard({
               if (boss.beamCharge > 60) {
                 // Charge complete! Shoot sweeping death laser center
                 boss.beamCharge = 0; // reset
-                addScreenShake(15);
+                addScreenShake(18);
                 SoundSynth.playExplosionSound("MEDIUM");
 
-                // Spawn a grid cluster of heavy horizontal expanding lasers
-                const projectileStreams = 9;
+                // Spawn a grid cluster of heavy horizontal expanding lasers (11 streams of heavy laser fire!)
+                const projectileStreams = 11;
                 for (let i = 0; i < projectileStreams; i++) {
-                  const xOffset = (i - 4) * 32;
+                  const xOffset = (i - 5) * 30;
                   state.bullets.push({
                     id: Math.random().toString(),
                     x: boss.x + xOffset,
                     y: boss.y + 35,
-                    vx: xOffset * 0.05,
-                    vy: 7.2,
-                    width: 7,
-                    height: 22,
-                    damage: 18,
+                    vx: xOffset * 0.055,
+                    vy: 8.5,
+                    width: 8,
+                    height: 24,
+                    damage: 22,
                     isPlayer: false,
                     color: "#f43f5e"
                   });
